@@ -4,8 +4,6 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from torchvision.datasets import CIFAR10
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize, Lambda
 
-import numpy as np
-
 
 def get_data_transformations(dataset_id, arch_id, one_hot=True):
     transform, target_transform = None, None
