@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 
-from torchvision.datasets import CIFAR10
+from torchvision.datasets import CIFAR10, MNIST
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize, Lambda
 
 
@@ -16,7 +16,15 @@ def get_data_transformations(dataset_id, arch_id, one_hot=True):
 
         if one_hot:
             target_transform = Lambda(lambda y: torch.zeros(10, dtype=torch.float).scatter_(0, torch.tensor(y), value=1))
-    
+    elif dataset_id == 'mnist' and arch_id == 'simple':
+        transform = Compose([
+            ToTensor(),
+            Normalize((0.1307,), (0.3081,))  # Normalize
+        ])
+
+        if one_hot:
+            target_transform = Lambda(lambda y: torch.zeros(10, dtype=torch.float).scatter_(0, torch.tensor(y), value=1))
+
     return transform, target_transform
 
 
@@ -40,15 +48,19 @@ class SubsetToDataset(Dataset):
         return len(self.subset)
 
 
-def split_dataset_core_train(dataset_id, arch_id, split_rate):
+def split_dataset_core_train(dataset_id, arch_id, split_rate, seed=13):
     whole_dataset, transform, target_transform = None, None, None
     if dataset_id == 'cifar10':
         whole_dataset = CIFAR10('./data', train=True, transform=None, target_transform=None, download=True)
         transform, target_transform = get_data_transformations(dataset_id, arch_id)
-    
+    elif dataset_id == 'mnist':
+        whole_dataset = MNIST('./data', train=True, transform=None, target_transform=None, download=True)
+        transform, target_transform = get_data_transformations(dataset_id, arch_id)
+
     len_train_dataset = int(len(whole_dataset) * split_rate)
     len_core_dataset = len(whole_dataset) - len_train_dataset
-    core_subset, train_subset = random_split(whole_dataset, [len_core_dataset, len_train_dataset])    
+    generator = torch.Generator().manual_seed(seed)
+    core_subset, train_subset = random_split(whole_dataset, [len_core_dataset, len_train_dataset], generator=generator)    
 
     core_dataset = SubsetToDataset(core_subset, transform=transform, target_transform=None) # ce loss
     train_dataset = SubsetToDataset(train_subset, transform=transform, target_transform=target_transform) # mse loss

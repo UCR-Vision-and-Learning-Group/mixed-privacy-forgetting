@@ -8,10 +8,11 @@ import os
 import argparse
 
 from dataset import split_dataset_core_train, get_core_train_loader
+from model import SimpleNet, MixedLinearModel
 
 
 def train_core_dataset(core_loader, dataset_id, arch_id, criterion_id, optimizer_id, lr, num_epoch,
-                       save_path=None, device_id=0, use_pretrained=True, print_loss_log=10):
+                       save_path=None, device_id=0, use_pretrained=True, print_loss_log=10, reshape_data=None):
     device = 'cuda:{}'.format(device_id) if torch.cuda.is_available() else 'cpu'
     
     # init model
@@ -21,10 +22,13 @@ def train_core_dataset(core_loader, dataset_id, arch_id, criterion_id, optimizer
             model = resnet18(weights=ResNet18_Weights.DEFAULT)
         else:
             model = resnet18()
-
-    if dataset_id == 'cifar10':
-        num_ftrs = model.fc.in_features
-        model.fc = nn.Linear(num_ftrs, 10)
+        
+        if dataset_id == 'cifar10':
+            num_ftrs = model.fc.in_features
+            model.fc = nn.Linear(num_ftrs, 10)
+            
+    elif arch_id == 'simple':
+        model = SimpleNet(784, 10)
 
     model = model.to(device)
 
@@ -45,7 +49,8 @@ def train_core_dataset(core_loader, dataset_id, arch_id, criterion_id, optimizer
         model.train()
         for iter_idx, (core_data, core_label) in enumerate(core_loader):
             core_data, core_label = core_data.to(device), core_label.to(device)
-
+            if reshape_data:
+                core_data = core_data.reshape(tuple(reshape_data))
             optimizer.zero_grad()
             preds = model(core_data)
             loss = criterion(preds, core_label)
@@ -62,6 +67,8 @@ def train_core_dataset(core_loader, dataset_id, arch_id, criterion_id, optimizer
             sample_count = 0
             for core_data, core_label in core_loader:
                 core_data, core_label = core_data.to(device), core_label.to(device)
+                if reshape_data:
+                    core_data = core_data.reshape(tuple(reshape_data))
                 preds = model(core_data)
                 
                 predicted_label = torch.argmax(preds, dim=1)
@@ -84,8 +91,20 @@ def train_core_dataset(core_loader, dataset_id, arch_id, criterion_id, optimizer
             }, save_path)
             
 
-def train_train_dataset():
-    pass
+def train_with_jvp_train_dataset(core_loader, dataset_id, arch_id, criterion_id, optimizer_id, lr, num_epoch, 
+                                 save_path=None, device_id=0, use_pretrained=True, print_loss_log=10, reshape_data=None):
+    device = 'cuda:{}'.format(device_id) if torch.cuda.is_available() else 'cpu'
+
+    # save core model parameters
+    model = None
+    if arch_id == 'resnet18':
+        model = resnet18()
+        if dataset_id == 'cifar10':
+            num_ftrs = model.fc.in_features
+            model.fc = nn.Linear(num_ftrs, 10)
+    elif arch_id == 'simple':
+        model = SimpleNet(784, 10)
+
 
 
 if __name__ == "__main__":
@@ -106,13 +125,15 @@ if __name__ == "__main__":
     parser.add_argument('-sp', '--save-path', dest='save_path', type=str)
     parser.add_argument('-dei', '--device-id', dest='device_id', type=int, default=0)
     parser.add_argument('-up', '--use-pretrained', dest='use_pretrained', action='store_true')
-    parser.add_argument('-pll', '--print-loss-log', dest='print_loss_log', default=10)
+    parser.add_argument('-pll', '--print-loss-log', dest='print_loss_log', default=10, type=int)
+    parser.add_argument('-rd', '--reshape-data', dest='reshape_data', nargs='*', type=int)
+    parser.add_argument('-se', '--seed', dest='seed', type=int, default=13)
 
     args = parser.parse_args()
 
     if args.mode == 'train-core-dataset':
-        core_dataset, _ = split_dataset_core_train(args.dataset_id, args.arch_id, args.split_rate)
+        core_dataset, _ = split_dataset_core_train(args.dataset_id, args.arch_id, args.split_rate, seed=args.seed)
         core_loader, _ = get_core_train_loader(core_dataset, _, args.batch_size, shuffle=args.shuffle)
         train_core_dataset(core_loader, args.dataset_id, args.arch_id, args.criterion_id, args.optimizer_id,
                            args.learning_rate, args.num_epoch, save_path=args.save_path, device_id=args.device_id,
-                           use_pretrained=args.use_pretrained, print_loss_log=args.print_loss_log)
+                           use_pretrained=args.use_pretrained, print_loss_log=args.print_loss_log, reshape_data=args.reshape_data)
