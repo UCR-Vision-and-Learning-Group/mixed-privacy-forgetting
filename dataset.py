@@ -72,5 +72,17 @@ def get_core_train_loader(core_dataset, train_dataset, batch_size, shuffle=True)
     return core_loader, train_loader
 
 
+def get_train_loader(dataset_id, arch_id, batch_size, shuffle=True):
+    train_dataset = None
+    if dataset_id == 'cifar10':
+        if arch_id == 'resnet18':
+            transform, target_transform = get_data_transformations(dataset_id, arch_id)
+            train_dataset = CIFAR10('./data', train=True, transform=transform, target_transform=target_transform, download=True)
+            test_dataset = CIFAR10('./data', train=False, transform=transform, download=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle)
+    test_loader = DataLoader(test_dataset, batch_size=256, shuffle=shuffle)
+    return train_loader, test_loader
+
+
 def split_train_dataset_remaining_forget():
     pass

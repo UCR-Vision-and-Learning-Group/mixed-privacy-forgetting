@@ -96,13 +96,17 @@ def train_core_dataset(core_loader, dataset_id, arch_id, criterion_id, optimizer
             
 
 def train_with_jvp_train_dataset(train_loader, dataset_id, arch_id, checkpoint_path, criterion_id, optimizer_id, lr, num_epoch, 
-                                 save_path=None, device_id=0, print_loss_log=10, reshape_data=None, weight_decay=0):
+                                 save_path=None, device_id=0, print_loss_log=10, reshape_data=None, weight_decay=0,
+                                 use_pretrained=True):
     device = 'cuda:{}'.format(device_id) if torch.cuda.is_available() else 'cpu'
 
     # save core model parameters
     model = None
     if arch_id == 'resnet18':
-        model = resnet18()
+        if use_pretrained:
+            model = resnet18(weights=ResNet18_Weights.DEFAULT)
+        else:
+            model = resnet18()
         if dataset_id == 'cifar10':
             num_ftrs = model.fc.in_features
             model.fc = nn.Linear(num_ftrs, 10)
