@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch.func import functional_call
 import torch.autograd.forward_ad as fwAD
+from torchvision.models import resnet50, ResNet50_Weights
 
 
 def reset_parameters(arch):
@@ -26,6 +27,22 @@ class Flatten(nn.Module):
     
     def forward(self, x):
         return torch.flatten(x, 1)
+
+def init_pretrained_model(arch_id, dataset_id, use_default=True, pretrained_model_path=None):
+    pretrained_model = None
+    if arch_id == 'resnet50':
+        if use_default and pretrained_model_path is None:
+            pretrained_model = resnet50(weights=ResNet50_Weights.DEFAULT)
+        else:
+            checkpoint = torch.load(pretrained_model_path)
+            pretrained_model = resnet50()
+            pretrained_model.load_state_dict(checkpoint['model_state_dict'])
+        
+        if dataset_id == 'cifar10':
+            num_ftrs = pretrained_model.fc.in_features
+            pretrained_model.fc = nn.Linear(num_ftrs, 10)
+
+    return pretrained_model
 
 def split_model_to_feature_linear(pretrained_model, number_of_linearized_components, device):
     kid_arr = []
