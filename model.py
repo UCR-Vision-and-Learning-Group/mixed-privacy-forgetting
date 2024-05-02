@@ -3,41 +3,64 @@ import torch.nn as nn
 from torch.func import functional_call
 import torch.autograd.forward_ad as fwAD
 
-from torchvision.models import resnet18
 
-class SimpleNet(nn.Module):
-    def __init__(self, in_features, out_features) -> None:
+def reset_parameters(arch):
+    for kid in arch.children():
+        if len([grand_kid for grand_kid in kid.children()]) == 0:
+            if hasattr(kid, 'reset_parameters'):
+                kid.reset_parameters()
+        else:
+            reset_parameters(kid)
+
+def freeze(arch):
+    for p in arch.parameters():
+        p.requires_grad = False
+
+def thaw(arch):
+    for p in arch.parameters():
+        p.requires_grad = True
+
+class Flatten(nn.Module):
+    def __init__(self) -> None:
         super().__init__()
-        self.lin_1 = nn.Linear(in_features, 128)
-        self.lin_2 = nn.Linear(128, out_features)
-        self.act = nn.ReLU()
-
-    def forward(self, x):
-        return self.lin_2(self.act(self.lin_1(x)))
-
-class MixedLinearModel(nn.Module):
-    def __init__(self, dataset_id, arch_id, zero_init=False):
-        super().__init__()
-        self.tangent_model = None
-        self.dataset_id = dataset_id
-        self.arch_id = arch_id
-        self.zero_init = zero_init
-        if self.arch_id == 'resnet18':
-            self.tangent_model = resnet18()
-            if self.dataset_id == 'cifar10':
-                num_ftrs = self.tangent_model.fc.in_features
-                self.tangent_model.fc = nn.Linear(num_ftrs, 10)
-        elif self.arch_id == 'simple':
-            if self.dataset_id == 'mnist':
-                self.tangent_model = SimpleNet(784, 10)
-
-        if self.zero_init:
-            for p in self.tangent_model.parameters():
-                p.data.fill_(0)
-
-        self.tangents = {name: p for name, p in self.tangent_model.named_parameters()}
     
-    def forward(self, core_model_params, inp):
+    def forward(self, x):
+        return torch.flatten(x, 1)
+
+def split_model_to_feature_linear(pretrained_model, number_of_linearized_components, device):
+    kid_arr = []
+    for kid in pretrained_model.children():
+        grand_kid_arr = [c for c in kid.children()]
+        if len(grand_kid_arr) > 0:
+            for grand_kid in grand_kid_arr:
+                kid_arr.append(grand_kid)
+        else:
+            kid_arr.append(kid)
+
+    feature_backbone = nn.Sequential(*kid_arr[:-number_of_linearized_components])
+    freeze(feature_backbone)
+    feature_backbone = feature_backbone.to(device)
+
+    linearized_head_core = kid_arr[-number_of_linearized_components:]
+    linearized_head_core.insert(len(linearized_head_core) - 1, Flatten())
+
+    linearized_head_core = nn.Sequential(*linearized_head_core)
+    params = {name: p.detach().clone().to(device) for name, p in linearized_head_core.named_parameters()}
+
+    return feature_backbone, linearized_head_core, params
+
+class MixedLinear(nn.Module):
+    def __init__(self, arch) -> None:
+        super().__init__()
+        self.tangent_model = arch
+        reset_parameters(self.tangent_model)
+        thaw(self.tangent_model)
+        self.tangents = {name: p for name, p in self.tangent_model.named_parameters()}
+
+    def forward(self, feature_backbone, core_model_params, inp):
+        with torch.no_grad():
+            inp = feature_backbone(inp)
+
         dual_params = {}
         with fwAD.dual_level():
             for name, p in core_model_params.items():
