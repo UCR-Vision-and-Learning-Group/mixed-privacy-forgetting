@@ -88,8 +88,8 @@ def test_pretrain(base_model, test_loader, optimizer,
             sample_count += test_data.shape[0]
             if test_iter_idx == 0 or (test_iter_idx + 1) % 25 == 0 or (test_iter_idx + 1) == len(test_loader):
                 print('test iter - processing: {}/{}'.format(test_iter_idx + 1, len(test_loader)))
-        print('epoch: {}/{}, test accuracy: {}'.format(epoch + 1, 50, true_count / sample_count))
-        logging.info('epoch: {}/{}, test accuracy: {}'.format(epoch + 1, 50, true_count / sample_count))
+        print('epoch: {}/{}, test accuracy: {}'.format(epoch + 1, 20, true_count / sample_count))
+        logging.info('epoch: {}/{}, test accuracy: {}'.format(epoch + 1, 20, true_count / sample_count))
         running_test_acc.append(true_count / sample_count)
         checkpoint['running_test_acc'] = running_test_acc
         
@@ -115,7 +115,7 @@ def train_pretrain(base_model, core_loader, optimizer, criterion, running_loss, 
         curr_lr = optimizer.param_groups[0]["lr"]
         running_loss.append(loss.item())
         if iter_idx == 0 or (iter_idx + 1) % 100 == 0 or (iter_idx + 1) == len(core_loader):
-            print('epoch: {}/{}, iter: {}/{}, lr: {}, loss: {}'.format(epoch + 1, 50, iter_idx + 1, len(core_loader), curr_lr, loss.item()))
-            logging.info('epoch: {}/{}, iter: {}/{}, lr: {}, loss: {}'.format(epoch + 1, 50, iter_idx + 1, len(core_loader), curr_lr, loss.item()))
+            print('epoch: {}/{}, iter: {}/{}, lr: {}, loss: {}'.format(epoch + 1, 20, iter_idx + 1, len(core_loader), curr_lr, loss.item()))
+            logging.info('epoch: {}/{}, iter: {}/{}, lr: {}, loss: {}'.format(epoch + 1, 20, iter_idx + 1, len(core_loader), curr_lr, loss.item()))
     checkpoint['running_loss'] = running_loss
     return base_model, optimizer, running_loss, checkpoint

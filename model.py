@@ -36,11 +36,12 @@ def init_pretrained_model(arch_id, dataset_id, use_default=True, pretrained_mode
         else:
             checkpoint = torch.load(pretrained_model_path)
             pretrained_model = resnet50()
-            pretrained_model.load_state_dict(checkpoint['model_state_dict'])
         
         if dataset_id == 'cifar10':
             num_ftrs = pretrained_model.fc.in_features
             pretrained_model.fc = nn.Linear(num_ftrs, 10)
+        if pretrained_model_path is not None:
+            pretrained_model.load_state_dict(checkpoint['model_state_dict'])
 
     return pretrained_model
 

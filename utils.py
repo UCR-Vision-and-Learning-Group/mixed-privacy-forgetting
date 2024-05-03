@@ -3,7 +3,7 @@ import torch
 import logging
 from datetime import datetime
 import os
-import sys
+import matplotlib.pyplot as plt
 
 def init_exp(mode, name_arr):
     curr_file_name = mode.split('-')
@@ -24,9 +24,13 @@ def init_exp(mode, name_arr):
     logging.basicConfig(filename=log_path, level=logging.INFO)
 
     logging.info('experiment files initialized: {}'.format(exp_dir))
-
     exp_path = os.path.join(exp_dir, '{}.pth'.format(file_name_exp))
     return exp_path
+
+
+def get_core_model_path(exp_path):
+    split_exp_path = os.path.split(exp_path)
+    return os.path.join(split_exp_path[0], '{}_core_model.pth'.format(split_exp_path[1].split('.')[0]))
 
 def init_checkpoint(running_loss, running_test_acc, running_train_acc, best_model_test_acc, best_model_epoch, exp_path):
     torch.save({
@@ -36,7 +40,8 @@ def init_checkpoint(running_loss, running_test_acc, running_train_acc, best_mode
         'best_model_test_acc': best_model_test_acc,
         'best_model_epoch': best_model_epoch,
         'model_state_dict': None,
-        'optimizer_state_dict': None 
+        'optimizer_state_dict': None,
+        'core_model_params': None
     }, exp_path)
 
 def get_checkpoint(exp_path):
@@ -44,3 +49,8 @@ def get_checkpoint(exp_path):
 
 def set_checkpoint(checkpoint, exp_path):
     torch.save(checkpoint, exp_path)
+
+# plotting functions
+def plot_everything():
+    # loss
+    pass

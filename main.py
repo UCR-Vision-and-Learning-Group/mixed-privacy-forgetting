@@ -14,7 +14,11 @@ def train_user_data(arch_id, dataset_id, number_of_linearized_components,
                     use_default=True, pretrained_model_path=None,
                     device_id=0, shuffle=True, split_rate=0):
     
-    exp_path = init_exp('train-user-data', [arch_id, dataset_id, 'last{}'.format(number_of_linearized_components)])
+    name_arr = [arch_id, dataset_id, 'last{}'.format(number_of_linearized_components)]
+    if pretrained_model_path is not None:
+        name_arr = name_arr + ['split{}'.format(split_rate)]
+
+    exp_path = init_exp('train-user-data', name_arr)
     
     device = 'cuda:{}'.format(device_id) if torch.cuda.is_available() else 'cpu'
     pretrained_model = init_pretrained_model(arch_id, dataset_id, use_default=use_default, pretrained_model_path=pretrained_model_path)
@@ -22,11 +26,14 @@ def train_user_data(arch_id, dataset_id, number_of_linearized_components,
     feature_model, linear_model, linear_model_params = split_model_to_feature_linear(pretrained_model,
                                                                                      number_of_linearized_components,
                                                                                      device)
-    
+    torch.save({
+        'params': linear_model_params
+    }, get_core_model_path(exp_path))
+
     mixed_linear_model = MixedLinear(linear_model)
     mixed_linear_model = mixed_linear_model.to(device)
 
-    criterion = LossWrapper([nn.MSELoss(), L2Regularization()], [1, 0.00001])
+    criterion = LossWrapper([nn.MSELoss(), L2Regularization()], [1, 0.0005])
     optimizer = SGD(mixed_linear_model.parameters(), lr=0.05, momentum=0.9)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[24, 39], gamma=0.1)
 
@@ -62,7 +69,7 @@ def train_user_data(arch_id, dataset_id, number_of_linearized_components,
     checkpoint = get_checkpoint(exp_path)
     running_test_acc, checkpoint = test_mixed_linear(mixed_linear_model, user_test_loader, feature_model,
                                                         linear_model_params, optimizer, running_test_acc, epoch, device,
-                                                        checkpoint)
+                                                        checkpoint, best_model_test_acc, best_model_epoch)
     running_train_acc, checkpoint = train_accuracy_mixed_linear(mixed_linear_model, user_train_loader, feature_model,
                                                                 linear_model_params, running_train_acc, epoch, device,
                                                                 checkpoint)
@@ -127,6 +134,6 @@ if __name__ == "__main__":
     if args.mode == 'train-user-data':
         train_user_data(args.arch_id, args.dataset_id, args.number_of_linearized_components,
                         use_default=args.use_default, pretrained_model_path=args.pretrained_model_path,
-                        device_id=args.device_id)
+                        device_id=args.device_id, split_rate=args.split_rate)
     elif args.mode == 'pretrain':
         pretrain(args.arch_id, args.dataset_id, args.split_rate, device_id=args.device_id, shuffle=True)
