@@ -50,6 +50,9 @@ def get_checkpoint(exp_path):
 def set_checkpoint(checkpoint, exp_path):
     torch.save(checkpoint, exp_path)
 
+def params_to_device(param, device):
+    return {key: value.to(device) for key, value in param.items()}
+
 # plotting functions
 def plot_everything():
     # loss

@@ -9,10 +9,10 @@ class L2Regularization(nn.Module):
         l2_loss = None
         for param in params:       
             if l2_loss is None:
-                l2_loss = param.norm(2)
+                l2_loss = param.norm(2) ** 2
             else:
-                l2_loss = l2_loss + param.norm(2)
-        return l2_loss
+                l2_loss = l2_loss + (param.norm(2) ** 2)
+        return l2_loss / 2
 
 class LossWrapper(nn.Module):
     def __init__(self, loss_modules, hyperparameters):

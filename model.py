@@ -4,6 +4,8 @@ from torch.func import functional_call
 import torch.autograd.forward_ad as fwAD
 from torchvision.models import resnet50, ResNet50_Weights
 
+from utils import params_to_device
+
 
 def reset_parameters(arch):
     for kid in arch.children():
@@ -45,7 +47,7 @@ def init_pretrained_model(arch_id, dataset_id, use_default=True, pretrained_mode
 
     return pretrained_model
 
-def split_model_to_feature_linear(pretrained_model, number_of_linearized_components, device):
+def split_model_to_feature_linear(pretrained_model, number_of_linearized_components, device, send_params_to_device=True):
     kid_arr = []
     for kid in pretrained_model.children():
         grand_kid_arr = [c for c in kid.children()]
@@ -57,14 +59,16 @@ def split_model_to_feature_linear(pretrained_model, number_of_linearized_compone
 
     feature_backbone = nn.Sequential(*kid_arr[:-number_of_linearized_components])
     freeze(feature_backbone)
-    feature_backbone = feature_backbone.to(device)
+    if send_params_to_device:
+        feature_backbone = feature_backbone.to(device)
 
     linearized_head_core = kid_arr[-number_of_linearized_components:]
     linearized_head_core.insert(len(linearized_head_core) - 1, Flatten())
 
     linearized_head_core = nn.Sequential(*linearized_head_core)
-    params = {name: p.detach().clone().to(device) for name, p in linearized_head_core.named_parameters()}
-
+    params = {name: p.detach().clone() for name, p in linearized_head_core.named_parameters()}
+    if send_params_to_device:
+        params = params_to_device(params, device)
     return feature_backbone, linearized_head_core, params
 
 class MixedLinear(nn.Module):
@@ -86,3 +90,16 @@ class MixedLinear(nn.Module):
             out = functional_call(self.tangent_model, dual_params, inp)
             jvp = fwAD.unpack_dual(out).tangent
         return out + jvp
+    
+def get_core_model_params(core_model_params_path, device):
+    core_model_state_dict = torch.load(core_model_params_path)
+    core_model_state_dict = core_model_state_dict['params']
+    return params_to_device(core_model_state_dict, device)
+
+def get_trained_linear(checkpoint_path, arch_id, dataset_id, number_of_linearized_components):
+    checkpoint = torch.load(checkpoint_path)
+    pretrained_model = init_pretrained_model(arch_id, dataset_id)
+    feature_backbone, linearized_head_core, __ = split_model_to_feature_linear(pretrained_model, number_of_linearized_components, None, send_params_to_device=False)
+    mixed_linear = MixedLinear(linearized_head_core)
+    mixed_linear.load_state_dict(checkpoint['model_state_dict'])
+    return feature_backbone, mixed_linear

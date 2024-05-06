@@ -76,5 +76,22 @@ def get_user_loader(dataset_id, arch_id, batch_size, shuffle=True):
     return user_train_loader, user_test_loader
 
 
-def split_user_train_dataset_to_remaining_forget():
-    pass
+def split_user_train_dataset_to_remaining_forget(dataset_id, arch_id, split_rate, seed=13):
+    whole_dataset, transform, target_transform = None, None, None
+    if dataset_id == 'cifar10':
+        whole_dataset = CIFAR10('./data', train=True, transform=None, target_transform=None, download=True)
+        transform, target_transform = get_data_transformations(dataset_id, arch_id)
+
+    forget_dataset = int(len(whole_dataset) * split_rate)
+    len_remaining_dataset = len(whole_dataset) - forget_dataset
+    generator = torch.Generator().manual_seed(seed)
+    core_subset, user_train_subset = random_split(whole_dataset, [len_remaining_dataset, forget_dataset], generator=generator)    
+
+    remaining_dataset = SubsetToDataset(core_subset, transform=transform, target_transform=target_transform)
+    forget_dataset = SubsetToDataset(user_train_subset, transform=transform, target_transform=target_transform)
+    return remaining_dataset, forget_dataset
+
+def get_remaining_forget_loader(remaining_dataset, forget_dataset, batch_size, shuffle=True):
+    remaining_loader = DataLoader(remaining_dataset, batch_size=batch_size, shuffle=shuffle)
+    forget_loader = DataLoader(forget_dataset, batch_size=batch_size, shuffle=shuffle)
+    return remaining_loader, forget_loader
