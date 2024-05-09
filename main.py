@@ -15,7 +15,7 @@ def train_user_data(arch_id, dataset_id, number_of_linearized_components,
                     device_id=0, shuffle=True, split_rate=0):
     
     name_arr = [arch_id, dataset_id, 'last{}'.format(number_of_linearized_components)]
-    if pretrained_model_path is not None:
+    if split_rate > 0:
         name_arr = name_arr + ['split{}'.format(split_rate)]
 
     exp_path = init_exp('train-user-data', name_arr)
@@ -37,11 +37,16 @@ def train_user_data(arch_id, dataset_id, number_of_linearized_components,
     optimizer = SGD(mixed_linear_model.parameters(), lr=0.05, momentum=0.9)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[24, 39], gamma=0.1)
 
-    if pretrained_model_path is None:
-        user_train_loader, user_test_loader = get_user_loader(dataset_id, arch_id, 64, shuffle=shuffle)
-    else:
+    if pretrained_model_path is not None:
         core_dataset, user_train_dataset, user_test_dataset = split_dataset_to_core_user(dataset_id, arch_id, split_rate, seed=13)
         _, user_train_loader, user_test_loader = get_core_user_loader(core_dataset, user_train_dataset, user_test_dataset, 64, shuffle=shuffle)
+    elif split_rate > 0:
+        remaining_dataset, _ = split_user_train_dataset_to_remaining_forget(dataset_id, arch_id, split_rate, seed=13)
+        user_train_loader, _ = get_remaining_forget_loader(remaining_dataset, _, 64, shuffle=True)
+        _, user_test_loader = get_user_loader(dataset_id, arch_id, 64, shuffle=shuffle)
+    else:
+        user_train_loader, user_test_loader = get_user_loader(dataset_id, arch_id, 64, shuffle=shuffle)
+
 
     running_loss = []
     running_test_acc = []

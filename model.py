@@ -90,6 +90,11 @@ class MixedLinear(nn.Module):
             out = functional_call(self.tangent_model, dual_params, inp)
             jvp = fwAD.unpack_dual(out).tangent
         return out + jvp
+
+    def set_params(self, named_params):
+        # set only named params
+        pass
+
     
 def get_core_model_params(core_model_params_path, device):
     core_model_state_dict = torch.load(core_model_params_path)

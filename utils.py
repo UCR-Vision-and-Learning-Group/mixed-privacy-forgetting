@@ -30,7 +30,7 @@ def init_exp(mode, name_arr):
 
 def get_core_model_path(exp_path):
     split_exp_path = os.path.split(exp_path)
-    return os.path.join(split_exp_path[0], '{}_core_model.pth'.format(split_exp_path[1].split('.')[0]))
+    return os.path.join(split_exp_path[0], '{}_core_model.pth'.format('.'.join(split_exp_path[1].split('.')[:-1])))
 
 def init_checkpoint(running_loss, running_test_acc, running_train_acc, best_model_test_acc, best_model_epoch, exp_path):
     torch.save({
