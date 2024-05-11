@@ -14,6 +14,15 @@ class L2Regularization(nn.Module):
                 l2_loss = l2_loss + (param.norm(2) ** 2)
         return l2_loss / 2
 
+class MSELossDiv2(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.criterion = nn.MSELoss()
+
+    def forward(self, input, target):
+        loss = self.criterion(input, target)
+        return loss / 2 
+
 class LossWrapper(nn.Module):
     def __init__(self, loss_modules, hyperparameters):
         super().__init__()

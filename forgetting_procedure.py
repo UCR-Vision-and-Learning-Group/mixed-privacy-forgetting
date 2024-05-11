@@ -47,7 +47,7 @@ class JVPNormLoss(nn.Module):
                 dual_params[name] = fwAD.make_dual(p, tangents[name])
             out = functional_call(arch, dual_params, inp)
             jvp = fwAD.unpack_dual(out).tangent
-        return 2 * (torch.norm(jvp) ** 2 / inp.shape[0])
+        return (torch.norm(jvp) ** 2) / inp.shape[0]
 
 def calculate_gradient(feature_backbone, core_model_state_dict, model, loss_fnc, data_loader, device):
     grads = [torch.zeros_like(param) for param in model.parameters()]
@@ -56,7 +56,7 @@ def calculate_gradient(feature_backbone, core_model_state_dict, model, loss_fnc,
     for iter_idx, (inp, target) in enumerate(data_loader):
         model.zero_grad()
         inp = inp.to(device)
-        target = target.to(device)
+        target = 5 * target.to(device)
         curr_loss = loss_fnc(model(feature_backbone, core_model_state_dict, inp), target, model.parameters())
         curr_loss.backward()
         for idx, param in enumerate(model.parameters()):
@@ -128,7 +128,7 @@ for epoch in range(150):
         optimizer.zero_grad()
         jvp_norm_loss = 0.5 * jvp_norm_criterion(feature_backbone, linearized_head_core, core_model_state_dict, v_param, data)
         gradient_vector_inner_product_loss = gradient_vector_inner_product_criterion(grads, v_param.values())
-        regularizor_loss = 0.0005 * regularizor_criterion(v_param.values())
+        regularizor_loss = 0.5 * 0.0005 * regularizor_criterion(v_param.values())
         loss = jvp_norm_loss + regularizor_loss - gradient_vector_inner_product_loss
         loss.backward()
         optimizer.step()

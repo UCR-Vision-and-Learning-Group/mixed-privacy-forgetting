@@ -3,12 +3,25 @@ import torch.nn as nn
 from torch.optim import SGD, lr_scheduler, Adam
 
 import argparse
+import numpy as np
+import random
 
 from utils import *
 from train import *
 from loss import *
 from dataset import *
 from model import *
+
+def set_deterministic_environment(seed=13):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed) 
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.enabled = False
 
 def train_user_data(arch_id, dataset_id, number_of_linearized_components,
                     use_default=True, pretrained_model_path=None,
@@ -33,7 +46,7 @@ def train_user_data(arch_id, dataset_id, number_of_linearized_components,
     mixed_linear_model = MixedLinear(linear_model)
     mixed_linear_model = mixed_linear_model.to(device)
 
-    criterion = LossWrapper([nn.MSELoss(), L2Regularization()], [1, 0.0005])
+    criterion = LossWrapper([MSELossDiv2(), L2Regularization()], [1, 0.0005])
     optimizer = SGD(mixed_linear_model.parameters(), lr=0.05, momentum=0.9)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[24, 39], gamma=0.1)
 
@@ -135,6 +148,8 @@ if __name__ == "__main__":
     parser.add_argument('-sr', '--split-rate', dest='split_rate', type=float) # TODO: handle the exceptions
 
     args = parser.parse_args()
+
+    set_deterministic_environment()
 
     if args.mode == 'train-user-data':
         train_user_data(args.arch_id, args.dataset_id, args.number_of_linearized_components,
