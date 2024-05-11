@@ -17,5 +17,5 @@ python main.py --mode train-user-data --arch-id resnet50 --dataset-id cifar10 --
 ```
 
 ```bash
-python main.py --mode train-user-data --arch-id resnet50 --dataset-id cifar10 --number-of-linearized-components 5 --split-rate 0.1
+python main.py --mode train-user-data --arch-id resnet50 --dataset-id cifar10 --number-of-linearized-components 5 --split-rate 0.1 --use-default --device-id 1
 ```
