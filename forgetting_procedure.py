@@ -2,7 +2,7 @@ import torch
 from model import get_core_model_params, get_trained_linear, init_pretrained_model, split_model_to_feature_linear, freeze, thaw
 import torch.nn as nn
 from train import test_mixed_linear
-device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
+device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 from dataset import get_user_loader
 
 from torch.func import functional_call
