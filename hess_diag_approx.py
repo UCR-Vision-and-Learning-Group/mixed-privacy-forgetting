@@ -8,7 +8,7 @@ import torch
 import random
 import numpy as np
 
-device = 'cuda:2' if torch.cuda.is_available() else 'cpu'
+device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
 
 def set_deterministic(seed=42):
@@ -119,7 +119,7 @@ def calculate_hess_diag(feature_backbone, core_model_state_dict, model, loss_fnc
             print('iter: {}/{}'.format(iter_idx + 1, len(data_loader)))
     freeze(model)
 
-    hess_diags = [(diags / sample_count) + (regularizor_hyperparameter * torch.norm(param) ** 2) for diags, param in
+    hess_diags = [(diags / sample_count) + (regularizor_hyperparameter * (param * param)) for diags, param in
                   zip(hess_diags, v.values())]
     return hess_diags
 
@@ -164,4 +164,4 @@ with torch.no_grad():
 
 torch.save({
     'model_state_dict': mixed_linear.state_dict(),
-}, './hess_diag_model_100_iter.pth')
+}, './hess_diag_model_100_iter_fixed.pth')
