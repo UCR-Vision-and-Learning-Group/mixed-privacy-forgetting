@@ -5,6 +5,7 @@ import torch.autograd.forward_ad as fwAD
 from torchvision.models import resnet50, ResNet50_Weights
 
 from utils import params_to_device
+import logging
 
 
 def reset_parameters(arch):
@@ -30,7 +31,8 @@ class Flatten(nn.Module):
     def forward(self, x):
         return torch.flatten(x, 1)
 
-def init_pretrained_model(arch_id, dataset_id, use_default=True, pretrained_model_path=None):
+def init_pretrained_model(arch_id, dataset_id, use_default=True, pretrained_model_path=None, hidden_layers=None):
+    # hidden layers --> is an array of number of perceptrons in each layer hidden
     pretrained_model = None
     if arch_id == 'resnet50':
         if use_default and pretrained_model_path is None:
@@ -41,7 +43,26 @@ def init_pretrained_model(arch_id, dataset_id, use_default=True, pretrained_mode
         
         if dataset_id == 'cifar10':
             num_ftrs = pretrained_model.fc.in_features
-            pretrained_model.fc = nn.Linear(num_ftrs, 10)
+            if hidden_layers is None:
+                pretrained_model.fc = nn.Linear(num_ftrs, 10, bias=False)
+            else:
+                logging.info('arbitrary hidden layers are added {}'.format(hidden_layers))
+                kid_arr = []
+                for kid in pretrained_model.children():
+                    grand_kid_arr = [c for c in kid.children()]
+                    if len(grand_kid_arr) > 0:
+                        for grand_kid in grand_kid_arr:
+                            kid_arr.append(grand_kid)
+                    else:
+                        kid_arr.append(kid)
+                kid_arr = kid_arr[:-1] + [Flatten()]
+                curr_in = num_ftrs
+                for hidden_idx in range(len(hidden_layers)):
+                    kid_arr.append(nn.Linear(curr_in, hidden_layers[hidden_idx]))
+                    curr_in = hidden_layers[hidden_idx]
+                kid_arr.append(nn.Linear(curr_in, 10, bias=False))
+                pretrained_model = nn.Sequential(*kid_arr)
+
         if pretrained_model_path is not None:
             pretrained_model.load_state_dict(checkpoint['model_state_dict'])
 

@@ -25,7 +25,8 @@ def set_deterministic_environment(seed=13):
 
 def train_user_data(arch_id, dataset_id, number_of_linearized_components,
                     use_default=True, pretrained_model_path=None,
-                    device_id=0, shuffle=True, split_rate=0, weight_decay=0.0005):
+                    device_id=0, shuffle=True, split_rate=0, weight_decay=0.0005,
+                    init_hidden_layers=None):
     
     name_arr = [arch_id, dataset_id, 'last{}'.format(number_of_linearized_components)]
     if split_rate > 0:
@@ -34,7 +35,7 @@ def train_user_data(arch_id, dataset_id, number_of_linearized_components,
     exp_path = init_exp('train-user-data', name_arr)
     
     device = 'cuda:{}'.format(device_id) if torch.cuda.is_available() else 'cpu'
-    pretrained_model = init_pretrained_model(arch_id, dataset_id, use_default=use_default, pretrained_model_path=pretrained_model_path)
+    pretrained_model = init_pretrained_model(arch_id, dataset_id, use_default=use_default, pretrained_model_path=pretrained_model_path, hidden_layers=init_hidden_layers)
 
     feature_model, linear_model, linear_model_params = split_model_to_feature_linear(pretrained_model,
                                                                                      number_of_linearized_components,
@@ -93,11 +94,11 @@ def train_user_data(arch_id, dataset_id, number_of_linearized_components,
                                                                 checkpoint)
     set_checkpoint(checkpoint, exp_path)
 
-def pretrain(arch_id, dataset_id, split_rate, device_id=0, shuffle=True):
+def pretrain(arch_id, dataset_id, split_rate, device_id=0, shuffle=True, init_hidden_layers=None):
     exp_path = init_exp('pretrain', [arch_id, dataset_id, 'split{}'.format(split_rate)])
     
     device = 'cuda:{}'.format(device_id) if torch.cuda.is_available() else 'cpu'
-    pretrained_model = init_pretrained_model(arch_id, dataset_id, use_default=True, pretrained_model_path=None)
+    pretrained_model = init_pretrained_model(arch_id, dataset_id, use_default=True, pretrained_model_path=None, hidden_layers=init_hidden_layers)
     pretrained_model = pretrained_model.to(device)
 
     core_dataset, user_train_dataset, user_test_dataset = split_dataset_to_core_user(dataset_id, arch_id, split_rate, seed=13)
@@ -148,6 +149,7 @@ if __name__ == "__main__":
     parser.add_argument('-sr', '--split-rate', dest='split_rate', type=float, default=0) # TODO: handle the exceptions
 
     parser.add_argument('-wd', '--weight-decay', dest='weight_decay', type=float, default=0.0005)
+    parser.add_argument('-ihd', '--init-hidden-layers', dest='init_hidden_layers', nargs='*', type=int)
 
     args = parser.parse_args()
 
@@ -156,6 +158,6 @@ if __name__ == "__main__":
     if args.mode == 'train-user-data':
         train_user_data(args.arch_id, args.dataset_id, args.number_of_linearized_components,
                         use_default=args.use_default, pretrained_model_path=args.pretrained_model_path,
-                        device_id=args.device_id, split_rate=args.split_rate)
+                        device_id=args.device_id, split_rate=args.split_rate, init_hidden_layers=args.init_hidden_layers)
     elif args.mode == 'pretrain':
-        pretrain(args.arch_id, args.dataset_id, args.split_rate, device_id=args.device_id, shuffle=True)
+        pretrain(args.arch_id, args.dataset_id, args.split_rate, device_id=args.device_id, shuffle=True, init_hidden_layers=list(args.init_hidden_layers))
