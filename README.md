@@ -13,7 +13,7 @@ python main.py --mode train-user-data --arch-id resnet50 --dataset-id cifar10 --
 ```
 
 ```bash
-python main.py --mode train-user-data --arch-id resnet50 --dataset-id cifar10 --number-of-linearized-components 5 --pretrained-model-path checkpoint/05022024-112451-pretrain-resnet50-cifar10-split0.5/05022024_112451_pretrain_resnet50_cifar10_split0.5.pth --split-rate 0.5
+python main.py --mode train-user-data --arch-id resnet50 --dataset-id cifar10 --number-of-linearized-components 1 --pretrained-model-path checkpoint/05142024-180246-pretrain-resnet50-cifar10-split0.8/05142024_180246_pretrain_resnet50_cifar10_split0.8.pth --split-rate 0.8
 ```
 
 ```bash
