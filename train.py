@@ -3,14 +3,17 @@ import logging
 
 def test_mixed_linear(mixed_linear, test_loader, feature_backbone, params,
                       optimizer, running_test_acc, epoch, device, checkpoint,
-                      best_model_test_acc, best_model_epoch, save_param=True):
+                      best_model_test_acc, best_model_epoch, save_param=True, activation_variant=False):
     mixed_linear.eval()
     with torch.no_grad():
         true_count = 0
         sample_count = 0
         for test_iter_idx, (test_data, test_label) in enumerate(test_loader):
             test_data, test_label = test_data.to(device), test_label.to(device)
-            preds = mixed_linear(feature_backbone, params, test_data)
+            if activation_variant:
+                preds = mixed_linear(params, test_data)
+            else:
+                preds = mixed_linear(feature_backbone, params, test_data)
             predicted_label = torch.argmax(preds, dim=1)
             true_count += torch.count_nonzero(predicted_label == test_label).item()
             sample_count += test_data.shape[0]
@@ -33,13 +36,16 @@ def test_mixed_linear(mixed_linear, test_loader, feature_backbone, params,
     return running_test_acc, checkpoint
 
 def train_accuracy_mixed_linear(mixed_linear, train_loader, feature_backbone, params,
-                                running_train_acc, epoch, device, checkpoint, save_param=True):
+                                running_train_acc, epoch, device, checkpoint, save_param=True, activation_variant=False):
     with torch.no_grad(): 
         true_count = 0
         sample_count = 0
         for train_iter_idx, (train_data, train_label) in enumerate(train_loader):
             train_data, train_label = train_data.to(device), train_label.to(device)
-            preds = mixed_linear(feature_backbone, params, train_data)
+            if activation_variant:
+                preds = mixed_linear(params, train_data)
+            else:
+                preds = mixed_linear(feature_backbone, params, train_data)
             predicted_label = torch.argmax(preds, dim=1)
             ground_truth_label = torch.argmax(train_label, dim=1)
             true_count += torch.count_nonzero(predicted_label == ground_truth_label).item()
@@ -55,13 +61,16 @@ def train_accuracy_mixed_linear(mixed_linear, train_loader, feature_backbone, pa
 
 def train_mixed_linear(mixed_linear, train_loader, feature_backbone, params,
                        optimizer, criterion, scheduler, running_loss, device,
-                       epoch, checkpoint, save_param=True):
+                       epoch, checkpoint, save_param=True, activation_variant=False):
     mixed_linear.train()
     for iter_idx, (data, label) in enumerate(train_loader):
         data, label = data.to(device), label.to(device)
         label = label * 5
         optimizer.zero_grad()
-        preds = mixed_linear(feature_backbone, params, data)
+        if activation_variant:
+            preds = mixed_linear(params, data)
+        else:
+            preds = mixed_linear(feature_backbone, params, data)
         loss = criterion(preds, label, mixed_linear.parameters())
         loss.backward()
         optimizer.step()

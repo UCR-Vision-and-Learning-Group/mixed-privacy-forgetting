@@ -1,0 +1,16 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "train-user-data-resnet18-cifar10-last1-activation-variant",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": "--mode train-user-data --arch-id resnet18 --dataset-id cifar10-act --number-of-linearized-components 1 --use-default --activation-variant"
+        }
+    ]
+}

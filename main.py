@@ -28,7 +28,7 @@ def set_deterministic_environment(seed=13):
 def train_user_data(arch_id, dataset_id, number_of_linearized_components,
                     use_default=True, pretrained_model_path=None,
                     device_id=0, shuffle=True, split_rate=0, weight_decay=0.0005,
-                    init_hidden_layers=None):
+                    init_hidden_layers=None, activation_variant=False):
     name_arr = [arch_id, dataset_id, 'last{}'.format(number_of_linearized_components)]
     if split_rate > 0:
         name_arr = name_arr + ['split{}'.format(split_rate)]
@@ -36,7 +36,7 @@ def train_user_data(arch_id, dataset_id, number_of_linearized_components,
     exp_path = init_exp('train-user-data', name_arr)
 
     device = 'cuda:{}'.format(device_id) if torch.cuda.is_available() else 'cpu'
-    pretrained_model = init_pretrained_model(arch_id, dataset_id, use_default=use_default,
+    pretrained_model = init_pretrained_model(arch_id, dataset_id.split('-')[0], use_default=use_default,
                                              pretrained_model_path=pretrained_model_path,
                                              hidden_layers=init_hidden_layers)
 
@@ -48,7 +48,15 @@ def train_user_data(arch_id, dataset_id, number_of_linearized_components,
         'params': linear_model_params
     }, get_core_model_path(exp_path))
 
-    mixed_linear_model = MixedLinear(linear_model)
+    if activation_variant:
+        feature_model = feature_model.to('cpu')
+        del feature_model
+        feature_model = None
+
+    if activation_variant:
+        mixed_linear_model = MixedLinearActivationVariant(linear_model)
+    else:
+        mixed_linear_model = MixedLinear(linear_model)
     mixed_linear_model = mixed_linear_model.to(device)
 
     criterion = LossWrapper([MSELossDiv2(), L2Regularization()], [1, weight_decay])
@@ -57,15 +65,17 @@ def train_user_data(arch_id, dataset_id, number_of_linearized_components,
 
     if pretrained_model_path is not None:
         core_dataset, user_train_dataset, user_test_dataset = split_dataset_to_core_user(dataset_id, arch_id,
-                                                                                         split_rate, seed=13)
+                                                                                         split_rate, seed=13,
+                                                                                         number_of_linearized_components=number_of_linearized_components)
         _, user_train_loader, user_test_loader = get_core_user_loader(core_dataset, user_train_dataset,
                                                                       user_test_dataset, 64, shuffle=shuffle)
     elif split_rate > 0:
-        remaining_dataset, _ = split_user_train_dataset_to_remaining_forget(dataset_id, arch_id, split_rate, seed=13)
+        remaining_dataset, _ = split_user_train_dataset_to_remaining_forget(dataset_id, arch_id, split_rate, seed=13,
+                                                                            number_of_linearized_components=number_of_linearized_components)
         user_train_loader, _ = get_remaining_forget_loader(remaining_dataset, _, 64, shuffle=True)
-        _, user_test_loader = get_user_loader(dataset_id, arch_id, 64, shuffle=shuffle)
+        _, user_test_loader = get_user_loader(dataset_id, arch_id, 64, shuffle=shuffle, number_of_linearized_components=number_of_linearized_components)
     else:
-        user_train_loader, user_test_loader = get_user_loader(dataset_id, arch_id, 64, shuffle=shuffle)
+        user_train_loader, user_test_loader = get_user_loader(dataset_id, arch_id, 64, shuffle=shuffle, number_of_linearized_components=number_of_linearized_components)
 
     running_loss = []
     running_test_acc = []
@@ -82,12 +92,14 @@ def train_user_data(arch_id, dataset_id, number_of_linearized_components,
         running_test_acc, checkpoint = test_mixed_linear(mixed_linear_model, user_test_loader, feature_model,
                                                          linear_model_params, optimizer, running_test_acc, epoch,
                                                          device,
-                                                         checkpoint, best_model_test_acc, best_model_epoch)
+                                                         checkpoint, best_model_test_acc, best_model_epoch,
+                                                         activation_variant=activation_variant)
         running_train_acc, checkpoint = train_accuracy_mixed_linear(mixed_linear_model, user_train_loader,
                                                                     feature_model,
                                                                     linear_model_params, running_train_acc, epoch,
                                                                     device,
-                                                                    checkpoint)
+                                                                    checkpoint,
+                                                                    activation_variant=activation_variant)
         mixed_linear_model, optimizer, scheduler, running_loss, checkpoint = train_mixed_linear(mixed_linear_model,
                                                                                                 user_train_loader,
                                                                                                 feature_model,
@@ -95,16 +107,17 @@ def train_user_data(arch_id, dataset_id, number_of_linearized_components,
                                                                                                 optimizer, criterion,
                                                                                                 scheduler,
                                                                                                 running_loss, device,
-                                                                                                epoch, checkpoint)
+                                                                                                epoch, checkpoint,
+                                                                                                activation_variant=activation_variant)
         set_checkpoint(checkpoint, exp_path)
 
     checkpoint = get_checkpoint(exp_path)
     running_test_acc, checkpoint = test_mixed_linear(mixed_linear_model, user_test_loader, feature_model,
                                                      linear_model_params, optimizer, running_test_acc, epoch, device,
-                                                     checkpoint, best_model_test_acc, best_model_epoch)
+                                                     checkpoint, best_model_test_acc, best_model_epoch, activation_variant=activation_variant)
     running_train_acc, checkpoint = train_accuracy_mixed_linear(mixed_linear_model, user_train_loader, feature_model,
                                                                 linear_model_params, running_train_acc, epoch, device,
-                                                                checkpoint)
+                                                                checkpoint, activation_variant=activation_variant)
     set_checkpoint(checkpoint, exp_path)
 
 
@@ -237,6 +250,7 @@ if __name__ == "__main__":
 
     parser.add_argument('-wd', '--weight-decay', dest='weight_decay', type=float, default=0.0005)
     parser.add_argument('-ihd', '--init-hidden-layers', dest='init_hidden_layers', nargs='*', type=int)
+    parser.add_argument('-av', '--activation-variant', dest='activation_variant', action='store_true')
 
     args = parser.parse_args()
 
@@ -246,7 +260,7 @@ if __name__ == "__main__":
         train_user_data(args.arch_id, args.dataset_id, args.number_of_linearized_components,
                         use_default=args.use_default, pretrained_model_path=args.pretrained_model_path,
                         device_id=args.device_id, split_rate=args.split_rate,
-                        init_hidden_layers=args.init_hidden_layers)
+                        init_hidden_layers=args.init_hidden_layers, activation_variant=args.activation_variant)
     elif args.mode == 'pretrain':
         pretrain(args.arch_id, args.dataset_id, args.split_rate, device_id=args.device_id, shuffle=True,
                  init_hidden_layers=list(args.init_hidden_layers))

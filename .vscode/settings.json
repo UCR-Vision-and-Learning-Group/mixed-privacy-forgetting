@@ -1,0 +1,5 @@
+{
+    "omnisharp.sdkPath": "/home/umityigitbsrn/.dotnet/sdk/8.0.300",
+    "omnisharp.sdkVersion": "8.0.300",
+    "cmake.configureOnOpen": true
+}
