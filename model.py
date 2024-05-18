@@ -173,3 +173,35 @@ def get_trained_linear(checkpoint_path, arch_id, dataset_id, number_of_linearize
         mixed_linear = MixedLinear(linearized_head_core)
     mixed_linear.load_state_dict(checkpoint['model_state_dict'])
     return feature_backbone, mixed_linear
+
+
+# model related utils
+
+def calculate_gradient(feature_backbone, core_model_state_dict, model, loss_fnc, data_loader, device,
+                       activation_variant=False):
+    grads = [torch.zeros_like(param) for param in model.parameters()]
+    sample_count = 0
+    thaw(model)
+    for iter_idx, (inp, target) in enumerate(data_loader):
+        model.zero_grad()
+        inp = inp.to(device)
+        target = 5 * target.to(device)
+        if activation_variant:
+            curr_loss = loss_fnc(model(core_model_state_dict, inp), target, model.parameters())
+        else:
+            curr_loss = loss_fnc(model(feature_backbone, core_model_state_dict, inp), target, model.parameters())
+        curr_loss.backward()
+        for idx, param in enumerate(model.parameters()):
+            grads[idx] += (param.grad * inp.shape[0])
+        sample_count += inp.shape[0]
+        if iter_idx == 0 or (iter_idx + 1) % 50 == 0 or (iter_idx + 1) == len(data_loader):
+            print('iter: {}/{}'.format(iter_idx + 1, len(data_loader)))
+            logging.info('iter: {}/{}'.format(iter_idx + 1, len(data_loader)))
+    freeze(model)
+
+    last = []
+    for grad in grads:
+        tmp = grad / sample_count
+        tmp.requires_grad = False
+        last.append(tmp)
+    return last

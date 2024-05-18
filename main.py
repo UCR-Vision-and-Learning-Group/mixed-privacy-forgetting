@@ -1,5 +1,3 @@
-import torch
-import torch.nn as nn
 from torch.optim import SGD, lr_scheduler, Adam
 
 import argparse
@@ -11,7 +9,7 @@ from train import *
 from loss import *
 from dataset import *
 from model import *
-
+from forget import *
 
 def set_deterministic_environment(seed=13):
     random.seed(seed)
@@ -73,9 +71,11 @@ def train_user_data(arch_id, dataset_id, number_of_linearized_components,
         remaining_dataset, _ = split_user_train_dataset_to_remaining_forget(dataset_id, arch_id, split_rate, seed=13,
                                                                             number_of_linearized_components=number_of_linearized_components)
         user_train_loader, _ = get_remaining_forget_loader(remaining_dataset, _, 64, shuffle=True)
-        _, user_test_loader = get_user_loader(dataset_id, arch_id, 64, shuffle=shuffle, number_of_linearized_components=number_of_linearized_components)
+        _, user_test_loader = get_user_loader(dataset_id, arch_id, 64, shuffle=shuffle,
+                                              number_of_linearized_components=number_of_linearized_components)
     else:
-        user_train_loader, user_test_loader = get_user_loader(dataset_id, arch_id, 64, shuffle=shuffle, number_of_linearized_components=number_of_linearized_components)
+        user_train_loader, user_test_loader = get_user_loader(dataset_id, arch_id, 64, shuffle=shuffle,
+                                                              number_of_linearized_components=number_of_linearized_components)
 
     running_loss = []
     running_test_acc = []
@@ -114,7 +114,8 @@ def train_user_data(arch_id, dataset_id, number_of_linearized_components,
     checkpoint = get_checkpoint(exp_path)
     running_test_acc, checkpoint = test_mixed_linear(mixed_linear_model, user_test_loader, feature_model,
                                                      linear_model_params, optimizer, running_test_acc, epoch, device,
-                                                     checkpoint, best_model_test_acc, best_model_epoch, activation_variant=activation_variant)
+                                                     checkpoint, best_model_test_acc, best_model_epoch,
+                                                     activation_variant=activation_variant)
     running_train_acc, checkpoint = train_accuracy_mixed_linear(mixed_linear_model, user_train_loader, feature_model,
                                                                 linear_model_params, running_train_acc, epoch, device,
                                                                 checkpoint, activation_variant=activation_variant)
@@ -210,6 +211,7 @@ def save_activations(arch_id, dataset_id, number_of_linearized_components, devic
             }, os.path.join(data_root_path, 'train_data.pth')
         )
 
+        # noinspection PyShadowingBuiltins
         for iter, (data, label) in enumerate(user_test_loader):
             data = data.to(device)
             activations = feature_model(data)
@@ -234,6 +236,98 @@ def save_activations(arch_id, dataset_id, number_of_linearized_components, devic
         )
 
 
+def mixed_privacy(arch_id, dataset_id, number_of_linearized_components, split_rate, checkpoint_path,
+                  device_id=0, weight_decay=0.0005, activation_variant=False):
+    name_arr = [arch_id, dataset_id, 'last{}'.format(number_of_linearized_components), 'split{}'.format(split_rate)]
+    exp_path = init_exp('mixed-privacy', name_arr)
+
+    # loading core model and linearized model -- init in cpu
+    pretrained_model = init_pretrained_model(arch_id, dataset_id.split('-')[0])
+    _, linearized_head_core, __ = split_model_to_feature_linear(pretrained_model,
+                                                                number_of_linearized_components,
+                                                                None, send_params_to_device=False)
+    path_base_name = '_'.join(os.path.split(checkpoint_path)[1].split('-'))
+
+    core_model_state_dict = get_core_model_params(os.path.join(checkpoint_path,
+                                                               '{}_core_model.pth'.format(path_base_name)),
+                                                  'cpu')
+    feature_backbone, mixed_linear = get_trained_linear(os.path.join(checkpoint_path, '{}.pth'.format(path_base_name)),
+                                                        arch_id, dataset_id.split('-')[0],
+                                                        number_of_linearized_components,
+                                                        activation_variant=activation_variant)
+    del _
+    del __
+
+    if activation_variant:
+        feature_backbone = feature_backbone.to('cpu')
+        del feature_backbone
+        feature_backbone = None
+
+    v_param = {key: torch.randn_like(value, device='cpu') for key, value in
+               core_model_state_dict.items()}  # init in cpu
+
+    device = 'cuda:{}'.format(device_id) if torch.cuda.is_available() else 'cpu'
+
+    if not activation_variant:
+        feature_backbone = feature_backbone.to(device)
+        freeze(feature_backbone)
+
+    mixed_linear = mixed_linear.to(device)
+    freeze(mixed_linear)
+
+    linearized_head_core = linearized_head_core.to(device)
+    freeze(linearized_head_core)
+
+    core_model_state_dict = params_to_device(core_model_state_dict, device)
+    v_param = params_to_device(v_param, device)
+    for param in v_param.values():
+        param.requires_grad = True
+
+    remaining_dataset, forget_dataset = split_user_train_dataset_to_remaining_forget(dataset_id, arch_id, split_rate,
+                                                                                     number_of_linearized_components=number_of_linearized_components)
+    remain_loader, forget_loader = get_remaining_forget_loader(remaining_dataset, forget_dataset, 256)
+
+    main_criterion = LossWrapper([MSELossDiv2(), L2Regularization()], [1, weight_decay])
+    grads = calculate_gradient(feature_backbone, core_model_state_dict, mixed_linear, main_criterion, remain_loader,
+                               device, activation_variant=activation_variant)
+
+    grad_path = os.path.split(exp_path)[0]
+    grad_path = os.path.join(grad_path, '{}_grads.pth'.format('_'.join(os.path.split(grad_path)[1].split('-'))))
+    torch.save({
+        'grads': grads,
+    }, grad_path)
+
+    jvp_norm_criterion = JVPNormLoss(activation_variant=activation_variant)
+    gradient_vector_inner_product_criterion = GradientVectorInnerProduct()
+    regularizor_criterion = L2Regularization()
+
+    optimizer = SGD(v_param.values(), lr=0.001, momentum=0.999)
+
+    estimate_hess_inv_grad(feature_backbone, linearized_head_core, core_model_state_dict, v_param, optimizer,
+                           jvp_norm_criterion, gradient_vector_inner_product_criterion, regularizor_criterion,
+                           remain_loader, grads, device, activation_variant=activation_variant,
+                           weight_decay=weight_decay)
+
+    v_param_path = os.path.split(exp_path)[0]
+    v_param_path = os.path.join(v_param_path,
+                                '{}_v_param.pth'.format('_'.join(os.path.split(v_param_path)[1].split('-'))))
+    torch.save({
+        'v_param': v_param,
+    }, v_param_path)
+
+    forgetted = {name: first - second for name, first, second in
+                 zip(mixed_linear.tangents.keys(), mixed_linear.tangents.values(), v_param.values())}
+
+    with torch.no_grad():
+        state_dict = mixed_linear.state_dict()
+        for name, value in forgetted.items():
+            state_dict['tangent_model.{}'.format(name)] = value
+        mixed_linear.load_state_dict(state_dict)
+
+    torch.save({
+        'model_state_dict': mixed_linear.state_dict(),
+    }, exp_path)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -246,6 +340,7 @@ if __name__ == "__main__":
     parser.add_argument('-dei', '--device-id', dest='device_id', type=int, default=0)
     parser.add_argument('-ud', '--use-default', dest='use_default', action='store_true')
     parser.add_argument('-pmp', '--pretrained-model-path', dest='pretrained_model_path', type=str)
+    parser.add_argument('-cp', '--checkpoint-path', dest='checkpoint_path', type=str)
     parser.add_argument('-sr', '--split-rate', dest='split_rate', type=float, default=0)  # TODO: handle the exceptions
 
     parser.add_argument('-wd', '--weight-decay', dest='weight_decay', type=float, default=0.0005)
@@ -266,3 +361,7 @@ if __name__ == "__main__":
                  init_hidden_layers=list(args.init_hidden_layers))
     elif args.mode == 'save-activations':
         save_activations(args.arch_id, args.dataset_id, args.number_of_linearized_components, device_id=args.device_id)
+    elif args.mode == 'mixed-privacy':
+        mixed_privacy(args.arch_id, args.dataset_id, args.number_of_linearized_components, args.split_rate,
+                      args.checkpoint_path, device_id=args.device_id, weight_decay=args.weight_decay,
+                      activation_variant=args.activation_variant)

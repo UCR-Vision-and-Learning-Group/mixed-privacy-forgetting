@@ -1,4 +1,7 @@
 import torch.nn as nn
+import torch
+from torch.func import functional_call
+import torch.autograd.forward_ad as fwAD
 
 
 # TODO: the implementations are not that generic might be better than that also the parts
@@ -50,3 +53,39 @@ class LossWrapper(nn.Module):
                     loss += loss_module(inp, target) * hyperparameter
 
         return loss
+
+
+# losses observed from mixed privacy paper
+class JVPNormLoss(nn.Module):
+    def __init__(self, activation_variant=False) -> None:
+        super().__init__()
+        self.activation_variant = activation_variant
+
+    # noinspection PyMethodMayBeStatic
+    def forward(self, feature_backbone, arch, primals, tangents, inp):
+        if not self.activation_variant:
+            with torch.no_grad():
+                inp = feature_backbone(inp)
+
+        dual_params = {}
+        with fwAD.dual_level():
+            for name, p in primals.items():
+                dual_params[name] = fwAD.make_dual(p, tangents[name])
+            out = functional_call(arch, dual_params, inp)
+            jvp = fwAD.unpack_dual(out).tangent
+        return (torch.norm(jvp) ** 2) / inp.shape[0]
+
+
+class GradientVectorInnerProduct(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+    # noinspection PyMethodMayBeStatic
+    def forward(self, grads, vector_values):
+        grad_vector_inner_product_sum = None
+        for param, vector_value in zip(grads, vector_values):
+            if grad_vector_inner_product_sum is None:
+                grad_vector_inner_product_sum = torch.sum(param * vector_value)
+            else:
+                grad_vector_inner_product_sum += torch.sum(param * vector_value)
+        return grad_vector_inner_product_sum
