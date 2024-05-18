@@ -1,3 +1,4 @@
+import torch
 from torch.optim import SGD, lr_scheduler, Adam
 
 import argparse
@@ -10,6 +11,7 @@ from loss import *
 from dataset import *
 from model import *
 from forget import *
+
 
 def set_deterministic_environment(seed=13):
     random.seed(seed)
@@ -328,6 +330,109 @@ def mixed_privacy(arch_id, dataset_id, number_of_linearized_components, split_ra
         'model_state_dict': mixed_linear.state_dict(),
     }, exp_path)
 
+
+def forget_by_diag(arch_id, dataset_id, number_of_linearized_components, split_rate, checkpoint_path,
+                   device_id=0, weight_decay=0.0005, activation_variant=False, num_iter=100):
+    name_arr = [arch_id, dataset_id, 'last{}'.format(number_of_linearized_components), 'split{}'.format(split_rate),
+                'iter{}'.format(num_iter)]
+    exp_path = init_exp('forget-by-diag', name_arr)
+
+    # loading core model and linearized model -- init in cpu
+    path_base_name = '_'.join(os.path.split(checkpoint_path)[1].split('-'))
+
+    core_model_state_dict = get_core_model_params(os.path.join(checkpoint_path,
+                                                               '{}_core_model.pth'.format(path_base_name)),
+                                                  'cpu')
+    feature_backbone, mixed_linear = get_trained_linear(os.path.join(checkpoint_path, '{}.pth'.format(path_base_name)),
+                                                        arch_id, dataset_id.split('-')[0],
+                                                        number_of_linearized_components,
+                                                        activation_variant=activation_variant)
+
+    if activation_variant:
+        feature_backbone = feature_backbone.to('cpu')
+        del feature_backbone
+        feature_backbone = None
+
+    device = 'cuda:{}'.format(device_id) if torch.cuda.is_available() else 'cpu'
+
+    if not activation_variant:
+        feature_backbone = feature_backbone.to(device)
+        freeze(feature_backbone)
+
+    mixed_linear = mixed_linear.to(device)
+    freeze(mixed_linear)
+
+    core_model_state_dict = params_to_device(core_model_state_dict, device)
+
+    remain_dataset, _ = split_user_train_dataset_to_remaining_forget(dataset_id, arch_id, split_rate,
+                                                                     number_of_linearized_components=number_of_linearized_components)
+    remain_loader, _ = get_remaining_forget_loader(remain_dataset, _, 64, shuffle=False)
+
+    main_criterion = LossWrapper([MSELossDiv2(), L2Regularization()], [1, weight_decay])
+
+    remain_grads = calculate_gradient(feature_backbone, core_model_state_dict, mixed_linear, main_criterion,
+                                      remain_loader, device, activation_variant=activation_variant)
+
+    remain_grads = [grad.to('cpu') for grad in remain_grads]
+
+    expected_hess_diags = expected_hess_diag(feature_backbone, core_model_state_dict, mixed_linear, MSELossDiv2(),
+                                             weight_decay, remain_loader, device, num_iter=num_iter,
+                                             activation_variant=activation_variant)
+
+    if feature_backbone is not None:
+        feature_backbone = feature_backbone.to('cpu')
+        del feature_backbone
+        feature_backbone = None
+
+    core_model_state_dict = params_to_device(core_model_state_dict, 'cpu')
+    del core_model_state_dict
+    core_model_state_dict = None
+
+    remain_grads = [grad.to(device) for grad in remain_grads]
+    remain_grads_path = os.path.split(exp_path)[0]
+    remain_grads_path = os.path.join(remain_grads_path,
+                                     '{}_remaining_grads.pth'.format(
+                                         '_'.join(os.path.split(remain_grads_path)[1].split('-'))))
+    torch.save({'remaining_grads': remain_grads}, remain_grads_path)
+
+    expected_hess_diags_inv = [1 / expected for expected in expected_hess_diags]
+
+    expected_hess_diags_path = os.path.split(exp_path)[0]
+    expected_hess_diags_path = os.path.join(expected_hess_diags_path,
+                                            '{}_expected_hess_diags.pth'.format(
+                                                '_'.join(os.path.split(expected_hess_diags_path)[1].split('-'))))
+    torch.save({'expected_hess_diags': expected_hess_diags}, expected_hess_diags_path)
+
+    expected_hess_diags_inv_path = os.path.split(exp_path)[0]
+    expected_hess_diags_inv_path = os.path.join(expected_hess_diags_inv_path,
+                                                '{}_expected_hess_diags_inv.pth'.format(
+                                                    '_'.join(
+                                                        os.path.split(expected_hess_diags_inv_path)[1].split('-'))))
+    torch.save({'expected_hess_diags_inv': expected_hess_diags_inv}, expected_hess_diags_inv_path)
+
+    del expected_hess_diags
+    forgetting_update = [expected_inv * grad for expected_inv, grad in zip(expected_hess_diags_inv, remain_grads)]
+
+    forgetting_update_path = os.path.split(exp_path)[0]
+    forgetting_update_path = os.path.join(forgetting_update_path,
+                                          '{}_forgetting_update.pth'.format(
+                                              '_'.join(
+                                                  os.path.split(forgetting_update_path)[1].split('-'))))
+    torch.save({'forgetting_update': forgetting_update}, forgetting_update_path)
+
+    forgetted_model = {name: first - second for (name, first), second in
+                       zip(mixed_linear.tangents.items(), forgetting_update)}
+    with torch.no_grad():
+        state_dict = mixed_linear.state_dict()
+        for name, value in forgetted_model.items():
+            state_dict['tangent_model.{}'.format(name)] = value
+        mixed_linear.load_state_dict(state_dict)
+
+    torch.save({
+        'model_state_dict': mixed_linear.state_dict(),
+    }, exp_path)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -346,6 +451,7 @@ if __name__ == "__main__":
     parser.add_argument('-wd', '--weight-decay', dest='weight_decay', type=float, default=0.0005)
     parser.add_argument('-ihd', '--init-hidden-layers', dest='init_hidden_layers', nargs='*', type=int)
     parser.add_argument('-av', '--activation-variant', dest='activation_variant', action='store_true')
+    parser.add_argument('-ni', '--num-iter-for-diag', dest='num_iter', type=int, default=100)
 
     args = parser.parse_args()
 
@@ -365,3 +471,7 @@ if __name__ == "__main__":
         mixed_privacy(args.arch_id, args.dataset_id, args.number_of_linearized_components, args.split_rate,
                       args.checkpoint_path, device_id=args.device_id, weight_decay=args.weight_decay,
                       activation_variant=args.activation_variant)
+    elif args.mode == 'forget-by-diag':
+        forget_by_diag(args.arch_id, args.dataset_id, args.number_of_linearized_components, args.split_rate,
+                       args.checkpoint_path, device_id=args.device_id, weight_decay=args.weight_decay,
+                       activation_variant=args.activation_variant, num_iter=args.num_iter)
