@@ -432,7 +432,6 @@ def forget_by_diag(arch_id, dataset_id, number_of_linearized_components, split_r
         'model_state_dict': mixed_linear.state_dict(),
     }, exp_path)
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -452,7 +451,6 @@ if __name__ == "__main__":
     parser.add_argument('-ihd', '--init-hidden-layers', dest='init_hidden_layers', nargs='*', type=int)
     parser.add_argument('-av', '--activation-variant', dest='activation_variant', action='store_true')
     parser.add_argument('-ni', '--num-iter-for-diag', dest='num_iter', type=int, default=100)
-
     args = parser.parse_args()
 
     set_deterministic_environment()
@@ -475,3 +473,4 @@ if __name__ == "__main__":
         forget_by_diag(args.arch_id, args.dataset_id, args.number_of_linearized_components, args.split_rate,
                        args.checkpoint_path, device_id=args.device_id, weight_decay=args.weight_decay,
                        activation_variant=args.activation_variant, num_iter=args.num_iter)
+

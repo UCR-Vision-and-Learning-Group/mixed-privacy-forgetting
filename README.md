@@ -17,5 +17,15 @@ python main.py --mode train-user-data --arch-id resnet50 --dataset-id cifar10 --
 ```
 
 ```bash
-python main.py --mode train-user-data --arch-id resnet50 --dataset-id cifar10 --number-of-linearized-components 5 --split-rate 0.1 --use-default --device-id 1
+python main.py --mode mixed-privacy --arch-id resnet18 --dataset-id cifar10-act -nlc 1 --split-rate 0.1 \ 
+ -cp /home/umityigitbsrn/Desktop/umityigitbsrn/mixed-privacy-forgetting/checkpoint/05152024-011132-train-user-data-resnet18-cifar10-last1 \
+ --activation-variant --device-id 0
+```
+
+## forget using remaining data (adahessian)
+
+```bash
+python main.py --mode forget-by-diag --arch-id resnet18 --dataset-id cifar10-act -nlc 1 --split-rate 0.1 \ 
+ -cp /home/umityigitbsrn/Desktop/umityigitbsrn/mixed-privacy-forgetting/checkpoint/05152024-011132-train-user-data-resnet18-cifar10-last1 \
+ --activation-variant --device-id 0 --num-iter-for-diag 500
 ```

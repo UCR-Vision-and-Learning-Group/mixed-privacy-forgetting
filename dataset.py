@@ -55,7 +55,43 @@ def split_dataset_to_core_user(dataset_id, arch_id, split_rate, seed=13, number_
         whole_dataset = CIFAR10('./data', train=True, transform=None, target_transform=None, download=True)
         transform, target_transform = get_data_transformations(dataset_id, arch_id)
         user_test_dataset = CIFAR10('./data', train=False, transform=transform, download=True)
-    elif dataset_id == 'cifar10-act':
+    elif dataset_id == 'cifar100':
+        whole_dataset = CIFAR100('./data', train=True, transform=None, target_transform=None, download=True)
+        transform, target_transform = get_data_transformations(dataset_id, arch_id)
+        user_test_dataset = CIFAR100('./data', train=False, transform=transform, download=True)
+    elif dataset_id == 'caltech256':
+        # split 0.1 as test
+        test_split = 0.9
+        whole_dataset = ImageFolder('./data/Caltech256', transform=None, target_transform=None)
+
+        whole_len = int(test_split * len(whole_dataset))
+        test_len = len(whole_dataset) - whole_len
+
+        test_split_generator = torch.Generator().manual_seed(seed)
+
+        whole_dataset, user_test_dataset = random_split(whole_dataset, [whole_len, test_len],
+                                                        generator=test_split_generator)
+        transform, target_transform = get_data_transformations(dataset_id, arch_id)
+        user_test_dataset = SubsetToDataset(user_test_dataset, transform=transform, target_transform=None)
+    elif dataset_id == 'stanforddogs':
+        # split 0.2 as test
+        test_split = 0.9
+        whole_dataset = ImageFolder('./data/StanfordDogs', transform=None, target_transform=None)
+
+        whole_len = int(test_split * len(whole_dataset))
+        test_len = len(whole_dataset) - whole_len
+
+        test_split_generator = torch.Generator().manual_seed(seed)
+
+        whole_dataset, user_test_dataset = random_split(whole_dataset, [whole_len, test_len],
+                                                        generator=test_split_generator)
+        transform, target_transform = get_data_transformations(dataset_id, arch_id)
+        user_test_dataset = SubsetToDataset(user_test_dataset, transform=transform, target_transform=None)
+    elif dataset_id == 'stanfordcars':
+        whole_dataset = StanfordCars('./data', split='train', transform=None, target_transform=None, download=True)
+        transform, target_transform = get_data_transformations(dataset_id, arch_id)
+        user_test_dataset = StanfordCars('./data', split='test', transform=transform, download=True)
+    elif '-act' in dataset_id:
         root_path = './data/{}-{}-last{}'.format(arch_id, dataset_id.split('-')[0], number_of_linearized_components)
         whole_dataset = ActivationDataset(root_path, train=True, transform=None, target_transform=None)
         transform, target_transform = get_data_transformations(dataset_id, arch_id)
@@ -89,7 +125,56 @@ def get_user_loader(dataset_id, arch_id, batch_size, shuffle=True, number_of_lin
             user_train_dataset = CIFAR10('./data', train=True, transform=transform, target_transform=target_transform,
                                          download=True)
             user_test_dataset = CIFAR10('./data', train=False, transform=transform, download=True)
-    elif dataset_id == 'cifar10-act':
+    elif dataset_id == 'cifar100':
+        if arch_id == 'resnet50' or arch_id == 'resnet18':
+            transform, target_transform = get_data_transformations(dataset_id, arch_id)
+            user_train_dataset = CIFAR100('./data', train=True, transform=transform, target_transform=target_transform,
+                                          download=True)
+            user_test_dataset = CIFAR100('./data', train=False, transform=transform, download=True)
+    elif dataset_id == 'caltech256':
+        if arch_id == 'resnet50' or arch_id == 'resnet18':
+            transform, target_transform = get_data_transformations(dataset_id, arch_id)
+            user_train_dataset = ImageFolder('./data/Caltech256', transform=None,
+                                             target_transform=None)
+
+            test_split = 0.9
+            whole_len = int(test_split * len(user_train_dataset))
+            test_len = len(user_train_dataset) - whole_len
+
+            test_split_generator = torch.Generator().manual_seed(seed)
+
+            user_train_dataset, user_test_dataset = random_split(user_train_dataset, [whole_len, test_len],
+                                                                 generator=test_split_generator)
+
+            user_train_dataset = SubsetToDataset(user_train_dataset, transform=transform,
+                                                 target_transform=target_transform)
+            user_test_dataset = SubsetToDataset(user_test_dataset, transform=transform, target_transform=None)
+    elif dataset_id == 'stanforddogs':
+        if arch_id == 'resnet50' or arch_id == 'resnet18':
+            transform, target_transform = get_data_transformations(dataset_id, arch_id)
+            user_train_dataset = ImageFolder('./data/StanfordDogs', transform=None,
+                                             target_transform=None)
+
+            test_split = 0.9
+            whole_len = int(test_split * len(user_train_dataset))
+            test_len = len(user_train_dataset) - whole_len
+
+            test_split_generator = torch.Generator().manual_seed(seed)
+
+            user_train_dataset, user_test_dataset = random_split(user_train_dataset, [whole_len, test_len],
+                                                                 generator=test_split_generator)
+
+            user_train_dataset = SubsetToDataset(user_train_dataset, transform=transform,
+                                                 target_transform=target_transform)
+            user_test_dataset = SubsetToDataset(user_test_dataset, transform=transform, target_transform=None)
+    if dataset_id == 'stanfordcars':
+        if arch_id == 'resnet50' or arch_id == 'resnet18':
+            transform, target_transform = get_data_transformations(dataset_id, arch_id)
+            user_train_dataset = StanfordCars('./data', split='train', transform=transform,
+                                              target_transform=target_transform,
+                                              download=True)
+            user_test_dataset = StanfordCars('./data', split='test', transform=transform, download=True)
+    elif '-act' in dataset_id:
         root_path = './data/{}-{}-last{}'.format(arch_id, dataset_id.split('-')[0], number_of_linearized_components)
         transform, target_transform = get_data_transformations(dataset_id, arch_id)
         user_train_dataset = ActivationDataset(root_path, train=True, transform=transform,
@@ -106,7 +191,39 @@ def split_user_train_dataset_to_remaining_forget(dataset_id, arch_id, split_rate
     if dataset_id == 'cifar10':
         whole_dataset = CIFAR10('./data', train=True, transform=None, target_transform=None, download=True)
         transform, target_transform = get_data_transformations(dataset_id, arch_id)
-    elif dataset_id == 'cifar10-act':
+    elif dataset_id == 'cifar100':
+        whole_dataset = CIFAR100('./data', train=True, transform=None, target_transform=None, download=True)
+        transform, target_transform = get_data_transformations(dataset_id, arch_id)
+    elif dataset_id == 'caltech256':
+        # split 0.1 as test
+        test_split = 0.9
+        whole_dataset = ImageFolder('./data/Caltech256', transform=None, target_transform=None)
+
+        whole_len = int(test_split * len(whole_dataset))
+        test_len = len(whole_dataset) - whole_len
+
+        test_split_generator = torch.Generator().manual_seed(seed)
+
+        whole_dataset, _ = random_split(whole_dataset, [whole_len, test_len],
+                                        generator=test_split_generator)
+        transform, target_transform = get_data_transformations(dataset_id, arch_id)
+    elif dataset_id == 'stanforddogs':
+        # split 0.1 as test
+        test_split = 0.9
+        whole_dataset = ImageFolder('./data/StanfordDogs', transform=None, target_transform=None)
+
+        whole_len = int(test_split * len(whole_dataset))
+        test_len = len(whole_dataset) - whole_len
+
+        test_split_generator = torch.Generator().manual_seed(seed)
+
+        whole_dataset, _ = random_split(whole_dataset, [whole_len, test_len],
+                                        generator=test_split_generator)
+        transform, target_transform = get_data_transformations(dataset_id, arch_id)
+    elif dataset_id == 'stanfordcars':
+        whole_dataset = StanfordCars('./data', split='train', transform=None, target_transform=None, download=True)
+        transform, target_transform = get_data_transformations(dataset_id, arch_id)
+    elif '-act' in dataset_id:
         root_path = './data/{}-{}-last{}'.format(arch_id, dataset_id.split('-')[0], number_of_linearized_components)
         whole_dataset = ActivationDataset(root_path, train=True, transform=None, target_transform=None)
         transform, target_transform = get_data_transformations(dataset_id, arch_id)
