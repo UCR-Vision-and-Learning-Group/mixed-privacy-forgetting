@@ -1,0 +1,47 @@
+cff-version: 1.2.0
+title: "Towards Source-Free Machine Unlearning"
+authors:
+  - family-names: Ahmed
+    given-names: Sk Miraj
+  - family-names: Basaran
+    given-names: Umit Yigit
+  - family-names: Raychaudhuri
+    given-names: Dripta S.
+  - family-names: Dutta
+    given-names: Arindam
+  - family-names: Kundu
+    given-names: Rohit
+  - family-names: Niloy
+    given-names: Fahim Faisal
+  - family-names: Guler
+    given-names: Basak
+  - family-names: Roy-Chowdhury
+    given-names: Amit K.
+year: 2025
+month: 6
+pages: 4948-4957
+preferred-citation:
+  type: conference-paper
+  title: "Towards Source-Free Machine Unlearning"
+  authors:
+    - family-names: Ahmed
+      given-names: Sk Miraj
+    - family-names: Basaran
+      given-names: Umit Yigit
+    - family-names: Raychaudhuri
+      given-names: Dripta S.
+    - family-names: Dutta
+      given-names: Arindam
+    - family-names: Kundu
+      given-names: Rohit
+    - family-names: Niloy
+      given-names: Fahim Faisal
+    - family-names: Guler
+      given-names: Basak
+    - family-names: Roy-Chowdhury
+      given-names: Amit K.
+  year: 2025
+  month: 6
+  booktitle: "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)"
+  collection-title: "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)"
+  pages: 4948-4957
