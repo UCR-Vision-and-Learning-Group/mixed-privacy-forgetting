@@ -1,4 +1,18 @@
-# Mixed Privacy Forgetting
+# mixed-privacy-forgetting
+
+> implementation used for: **Towards Source-Free Machine Unlearning** (CVPR 2025), [[paper]](https://openaccess.thecvf.com/content/CVPR2025/html/Ahmed_Towards_Source-Free_Machine_Unlearning_CVPR_2025_paper.html)
+
+## citation
+```bibtex
+@inproceedings{ahmed_2025_cvpr,
+    author    = {Ahmed, Sk Miraj and Basaran, Umit Yigit and Raychaudhuri, Dripta S. and Dutta, Arindam and Kundu, Rohit and Niloy, Fahim Faisal and Guler, Basak and Roy-Chowdhury, Amit K.},
+    title     = {Towards Source-Free Machine Unlearning},
+    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+    month     = {June},
+    year      = {2025},
+    pages     = {4948-4957}
+}
+```
 
 ## pretrain model
 
