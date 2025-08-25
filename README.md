@@ -1,4 +1,4 @@
-# mixed-linear-forgetting
+# source-free-unlearning
 
 > implementation used for: **Towards Source-Free Machine Unlearning** (CVPR 2025), [[paper]](https://openaccess.thecvf.com/content/CVPR2025/html/Ahmed_Towards_Source-Free_Machine_Unlearning_CVPR_2025_paper.html)
 
